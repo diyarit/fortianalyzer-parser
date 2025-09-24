@@ -1,0 +1,6 @@
+Number,Name,Source,SourceInterface,Destinations,DestInterface,Services,Action,Description
+1,Rule_1,192.168.1.0/24,internal,10.0.0.0/24,wan1,HTTP,Allow,Auto-generated from traffic analysis
+2,Rule_2,192.168.1.0/24,internal,8.8.8.0/24,wan1,DNS,Allow,Auto-generated from traffic analysis
+3,Rule_3,192.168.2.0/24,dmz,203.0.113.0/24,wan1,HTTPS,Allow,Auto-generated from traffic analysis
+4,Rule_4,10.0.0.0/24,internal,192.168.1.0/24,internal,tcp/3389,Allow,Auto-generated from traffic analysis
+5,Rule_5,192.168.1.0/24,internal,172.16.0.0/24,vpn,tcp/22,Allow,Auto-generated from traffic analysis
