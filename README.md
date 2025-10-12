@@ -7,7 +7,7 @@ Transform thousands of FortiAnalyzer log entries into actionable FortiGate firew
 - **Parses FortiAnalyzer logs** and extracts network traffic patterns
 - **Groups IP addresses into subnets** for cleaner policy management (192.168.1.0/24 instead of individual IPs)
 - **Identifies traffic flows** between interfaces with source/destination mapping
-- **Translates ports to services** (150+ well-known services: HTTP, HTTPS, SSH, RDP, databases, etc.)
+- **Translates ports to services** (100+ enterprise-grade mappings: HTTP, HTTPS, databases, virtualization, cloud services, etc.)
 - **Generates FortiGate-ready policies** with standardized naming conventions
 - **Multiple output formats** (CSV, JSON, HTML, TEXT) for different use cases
 - **Parallel processing** for faster analysis of large log files
@@ -172,9 +172,9 @@ Structured data for API integration and programmatic processing with complete me
 - **Easier policy maintenance** and troubleshooting
 - **Consistent naming** across all network devices
 
-## 🔍 Comprehensive Service Recognition
+## 🔍 Enterprise-Grade Service Recognition
 
-The parser includes **150+ well-known service mappings** for accurate identification:
+The parser includes **100+ enterprise service mappings** for professional network analysis:
 
 ### Core Internet Services
 - **Web**: HTTP (80), HTTPS (443), HTTP-ALT (8080), HTTPS-ALT (8443)
@@ -256,8 +256,8 @@ FortiAnalyzer logs with these fields:
 ```powershell
 PS> .\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic-2024.log" -ShowProgress -OutputFormat HTML
 
-=== FortiAnalyzer Log Parser v2.3 ===
-Enhanced with FortiGate policy generation and standardized naming
+=== FortiAnalyzer Log Parser v2.4 ===
+Enhanced with comprehensive service recognition and FortiGate policy generation
 
 [2024-01-15 10:30:45] Starting log file parsing: traffic-2024.log
 [2024-01-15 10:30:47] Parsing completed successfully
@@ -290,7 +290,16 @@ If something's not working:
 
 ## 🔄 Version History
 
-### v2.3.0 - FortiGate Policy Generation (Latest)
+### v2.4.0 - Comprehensive Service Recognition (Latest)
+- **🔍 100+ service mappings** - Enterprise-grade service identification
+- **🎯 Smart service detection** - Automatic port-to-service translation
+- **🏢 Enterprise services** - Microsoft, databases, virtualization, cloud
+- **🔒 Security services** - VPN, authentication, monitoring tools
+- **💻 Development tools** - Docker, Kubernetes, CI/CD platforms
+- **📞 Communication** - VoIP, messaging, collaboration tools
+- **⚡ Enhanced performance** - Optimized service lookup and formatting
+
+### v2.3.0 - FortiGate Policy Generation
 - **🎯 Standardized policy naming** with FortiGate conventions
 - **📝 Clean TEXT output** with policy separators
 - **🎨 Enhanced HTML reports** with FortiGate-style interface
