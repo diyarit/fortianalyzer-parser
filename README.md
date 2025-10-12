@@ -1,121 +1,182 @@
 # FortiAnalyzer Log Parser
 
-Ever stared at thousands of lines of FortiAnalyzer logs wondering what's actually happening on your network? This PowerShell script does the heavy lifting for you. It chews through those logs and spits out clean, organized data about who's talking to whom on your network.
+Transform thousands of FortiAnalyzer log entries into actionable FortiGate firewall policies. This PowerShell script analyzes network traffic patterns and generates ready-to-implement firewall rules with standardized naming conventions.
 
-## What it does
+## 🚀 What it does
 
-- Parses FortiAnalyzer logs and pulls out the important network stuff
-- Groups IP addresses into subnets (because who wants to see 192.168.1.1, 192.168.1.2, 192.168.1.3... when you can just see 192.168.1.0/24)
-- Figures out which interfaces traffic is coming from and going to
-- Translates port numbers into actual service names (port 80 = HTTP, etc.)
-- Shows you a progress bar so you know it's not frozen on big files
-- Supports multiple output formats (CSV, JSON, HTML) for flexible data analysis
-- Offers parallel processing for faster analysis of large log files
-- Won't crash your computer even with massive log files
+- **Parses FortiAnalyzer logs** and extracts network traffic patterns
+- **Groups IP addresses into subnets** for cleaner policy management (192.168.1.0/24 instead of individual IPs)
+- **Identifies traffic flows** between interfaces with source/destination mapping
+- **Translates ports to services** (port 80 → HTTP, port 443 → HTTPS, etc.)
+- **Generates FortiGate-ready policies** with standardized naming conventions
+- **Multiple output formats** (CSV, JSON, HTML, TEXT) for different use cases
+- **Parallel processing** for faster analysis of large log files
+- **Professional HTML reports** with FortiGate-style interface
+- **Clean TEXT output** with policy separators for easy reading
 
-## What you need
+## 🎯 Key Features
 
-- PowerShell 5.1 or newer (pretty much any Windows machine from the last few years)
-- PowerShell Core 6.0+ if you're on Linux/Mac
-- Access to your FortiAnalyzer log files (obviously)
+### FortiGate Policy Generation
+- **Standardized naming**: `ALLOW_INTERNAL_TO_WAN1_HTTP`, `DENY_WAN1_TO_INTERNAL_RDP`
+- **Traffic flow analysis**: Clear source → destination interface mapping
+- **Service identification**: Automatic port-to-service translation
+- **Action recommendations**: Accept/Deny based on observed traffic
 
-## Getting started
+### Multiple Output Formats
+- **CSV**: Spreadsheet-friendly data for analysis
+- **JSON**: API integration and programmatic processing
+- **HTML**: Professional dashboard with FortiGate styling
+- **TEXT**: Clean, readable format with policy separators
 
-1. Download the script (or clone if you're into that):
+### Performance & Reliability
+- **Parallel processing** with configurable thread limits
+- **Memory optimization** for large files (500MB+ logs)
+- **Progress tracking** with real-time statistics
+- **Error handling** with detailed logging and recovery
+
+## 📋 Requirements
+
+- **PowerShell 5.1+** (Windows) or **PowerShell Core 6.0+** (Linux/Mac)
+- Access to FortiAnalyzer log files
+- Optional: ThreadJob module for parallel processing
+
+## 🚀 Quick Start
+
+### 1. Download & Setup
 ```bash
 git clone https://github.com/diyarit/fortianalyzer-parser.git
 cd fortianalyzer-parser
 ```
 
-2. If PowerShell complains about execution policies:
+### 2. Set Execution Policy (Windows)
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-## How to use it
-
-### Just the basics
+### 3. Basic Usage
 ```powershell
 .\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log"
 ```
 
-### Want to see progress? (recommended for big files)
+## 💡 Usage Examples
+
+### Basic Analysis
 ```powershell
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -ShowProgress
+# Simple CSV output
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic.log"
+
+# With progress tracking (recommended for large files)
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic.log" -ShowProgress
 ```
 
-### With detailed logging and debugging
+### Different Output Formats
 ```powershell
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -DebugMode
+# Professional HTML report
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic.log" -OutputFormat HTML -OutputFile "firewall-report.html"
+
+# Clean text format with policy separators
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic.log" -OutputFormat TEXT -OutputFile "policies.txt"
+
+# JSON for API integration
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic.log" -OutputFormat JSON -OutputFile "policies.json"
 ```
 
-### Custom output filename
+### Performance Optimization
 ```powershell
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -OutputFile "my-network-data.csv"
-```
+# Enable parallel processing
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "large-file.log" -UseParallel -MaxThreads 8
 
-### Using different output formats (CSV, JSON, HTML)
-```powershell
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -OutputFormat "JSON" -OutputFile "network-data.json"
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -OutputFormat "HTML" -OutputFile "network-report.html"
-```
-
-### Enable parallel processing for faster analysis
-```powershell
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -UseParallel -MaxThreads 4
-```
-
-### Full featured run (recommended for production)
-```powershell
-.\FortiAnalyzer-Parser.ps1 -LogFilePath "your-log-file.log" -ShowProgress -DebugMode -OutputFile "detailed-analysis.html" -OutputFormat "HTML" -UseParallel
+# Full-featured analysis (recommended for production)
+.\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic.log" -ShowProgress -DebugMode -OutputFormat HTML -UseParallel
 ```
 
 ## 📊 Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `LogFilePath` | String | Yes | - | Path to the FortiAnalyzer log file |
-| `OutputFile` | String | No | "NetworkTraffic.csv" | Output file name |
-| `OutputFormat` | String | No | "CSV" | Output format (CSV, JSON, or HTML) |
-| `ShowProgress` | Switch | No | False | Display progress bar during processing |
-| `DebugMode` | Switch | No | False | Enable detailed logging and debugging information |
-| `UseParallel` | Switch | No | False | Enable parallel processing for faster analysis |
-| `MaxThreads` | Int | No | 4 | Maximum number of threads to use for parallel processing (1-16) |
+| `LogFilePath` | String | ✅ | - | Path to FortiAnalyzer log file |
+| `OutputFile` | String | ❌ | "NetworkTraffic.csv" | Output file name |
+| `OutputFormat` | String | ❌ | "CSV" | Output format (CSV, JSON, HTML, TEXT) |
+| `ShowProgress` | Switch | ❌ | False | Display progress bar during processing |
+| `DebugMode` | Switch | ❌ | False | Enable detailed logging and debugging |
+| `UseParallel` | Switch | ❌ | False | Enable parallel processing |
+| `MaxThreads` | Int | ❌ | 4 | Maximum threads for parallel processing (1-16) |
 
-## 📈 Output
+## 📈 Output Formats
 
-The script generates output files in your chosen format (CSV, JSON, or HTML) with network communication details:
-
-- **SourceIP**: Original source IP address
-- **DestIP**: Original destination IP address  
-- **SourcePort**: Source port number
-- **DestPort**: Destination port number
-- **Service**: Service name or port designation
-- **SourceInterface**: Interface where traffic originated
-- **DestInterface**: Outgoing interface
-- **Protocol**: Network protocol (e.g., TCP, UDP)
-- **Action**: Traffic action (e.g., accept, deny)
-- **SourceSubnet**: Source IP consolidated into CIDR notation
-- **DestSubnet**: Destination IP consolidated into CIDR notation
-- **Count**: Number of occurrences of this connection pattern
-- **FirstSeen**: Timestamp of first occurrence
-- **LastSeen**: Timestamp of last occurrence
-
-### Example CSV Output
-```
-SourceIP,DestIP,SourcePort,DestPort,Service,SourceInterface,DestInterface,Protocol,Action,SourceSubnet,DestSubnet,Count,FirstSeen,LastSeen
-192.168.1.10,10.0.0.5,54321,80,HTTP,internal,wan1,6,accept,192.168.1.0/24,10.0.0.0/24,15,2024-01-15 08:12:34,2024-01-15 09:45:22
-192.168.1.15,8.8.8.8,12345,53,DNS,internal,wan1,17,accept,192.168.1.0/24,8.8.8.0/24,42,2024-01-15 08:10:12,2024-01-15 10:30:45
+### CSV Output
+Perfect for spreadsheet analysis and data manipulation:
+```csv
+PolicyName,IncomingInterface,OutgoingInterface,Source,Destination,Service,Action,TrafficCount
+ALLOW_INTERNAL_TO_WAN1_HTTP,internal,wan1,192.168.1.0/24,10.0.0.0/24,HTTP,accept,15
+DENY_WAN1_TO_INTERNAL_RDP,wan1,internal,203.0.113.0/24,192.168.1.0/24,RDP,deny,3
 ```
 
 ### HTML Output
-The HTML output includes the same data in a formatted table with basic styling and a summary section showing statistics about the processed data.
+Professional FortiGate-style dashboard with:
+- Summary cards showing key metrics
+- Color-coded status badges and device icons
+- Responsive design for mobile/desktop
+- Professional styling matching FortiGate interface
 
-## 🔍 Log Format Support
+### TEXT Output
+Clean, readable format with policy separators:
+```
+=== FORTIGATE LOG ANALYSIS RESULTS ===
 
-The script supports FortiAnalyzer logs with the following fields:
+Policy: ALLOW_INTERNAL_TO_WAN1_HTTP
+Source: 192.168.1.0/24
+Source Interface: internal
+Destination: 10.0.0.0/24
+Outgoing Interface: wan1
+Services: HTTP
+Action: allow
+Traffic Count: 15
+============================
+Policy: DENY_WAN1_TO_INTERNAL_RDP
+Source: 203.0.113.0/24
+Source Interface: wan1
+Destination: 192.168.1.0/24
+Outgoing Interface: internal
+Services: TCP/3389
+Action: deny
+Traffic Count: 3
+```
+
+### JSON Output
+Structured data for API integration and programmatic processing with complete metadata.
+
+## 🏷️ Standardized Policy Naming Convention
+
+### Naming Format
+`[ACTION]_[SOURCE_INTERFACE]_TO_[DEST_INTERFACE]_[SERVICE]`
+
+### Examples
+- `ALLOW_INTERNAL_TO_WAN1_HTTP` - Allow HTTP from internal to wan1
+- `DENY_WAN1_TO_INTERNAL_RDP` - Deny RDP from wan1 to internal
+- `ALLOW_DMZ_TO_WAN1_HTTPS` - Allow HTTPS from DMZ to wan1
+
+### Field Order (Consistent Across All Formats)
+1. **Policy Name** - Descriptive and unique identifier
+2. **Incoming Interface** - Source interface where traffic originates
+3. **Outgoing Interface** - Destination interface where traffic exits
+4. **Source** - Source IP addresses/networks (CIDR notation)
+5. **Destination** - Destination IP addresses/networks (CIDR notation)
+6. **Service/Services** - Protocols/ports used
+7. **Action** - Accept/Deny recommendation
+8. **Traffic Count** - Connection frequency
+
+### Benefits
+- **Clear traffic flow representation** for easy understanding
+- **Efficient firewall implementation** with ready-to-use names
+- **Easier policy maintenance** and troubleshooting
+- **Consistent naming** across all network devices
+
+## 🔍 Supported Log Format
+
+FortiAnalyzer logs with these fields:
 - `srcip=` - Source IP address
-- `dstip=` - Destination IP address  
+- `dstip=` - Destination IP address
 - `srcport=` - Source port
 - `dstport=` - Destination port
 - `service=` - Service name
@@ -124,73 +185,60 @@ The script supports FortiAnalyzer logs with the following fields:
 - `action=` - Traffic action
 - `proto=` - Protocol number
 
-## Why you'd want this
+## 🎯 Use Cases
 
-- **Figure out what's actually happening** on your network instead of guessing
-- **Document your network traffic** for compliance or just because your boss asked
-- **Security reviews** - see what ports and services are actually being used
-- **Network planning** - understand how your subnets and interfaces are connected
-- **Troubleshooting** - "What was talking to what when everything broke last Tuesday?"
+### Network Security
+- **Security audits** - Identify unauthorized traffic patterns
+- **Compliance reporting** - Document network communications
+- **Incident response** - Analyze traffic during security events
+- **Policy optimization** - Streamline existing firewall rules
 
-## The smart stuff it does
+### Network Planning
+- **Capacity planning** - Understand traffic volumes and patterns
+- **Network segmentation** - Identify communication requirements
+- **Service mapping** - Document application dependencies
+- **Infrastructure changes** - Plan network modifications
 
-### Groups IPs into subnets
-Instead of seeing every single IP, it groups them logically:
-- `192.168.1.10`, `192.168.1.20`, `192.168.1.30` becomes `192.168.1.0/24`
-- Still keeps the original IPs so you don't lose detail
+### Operational Efficiency
+- **Automated policy generation** - Reduce manual firewall configuration
+- **Documentation** - Maintain current network communication maps
+- **Troubleshooting** - Quickly identify communication issues
+- **Change management** - Track network traffic evolution
 
-### Translates ports to services
-Because remembering port numbers is for robots:
-- Port 80 → HTTP
-- Port 443 → HTTPS  
-- Port 53 → DNS
-- Port 3389 → RDP
-- Everything else → tcp/XXXX
+## 🚀 Performance Features
 
-### Won't kill your computer
-- Handles huge files without eating all your RAM
-- Processes stuff in chunks so it stays responsive
-- Shows progress so you know it's working
-- Parallel processing for even faster analysis of large files
+### Smart Processing
+- **Subnet consolidation** - Groups individual IPs into networks
+- **Service translation** - Converts ports to service names
+- **Memory optimization** - Handles large files efficiently
+- **Parallel processing** - Multi-threaded analysis for speed
 
-### v2.2 New Features & Improvements
-- **Multiple output formats** - export to CSV, JSON, or HTML
-- **Parallel processing** - analyze logs faster with multi-threading
-- **Enhanced HTML reports** - formatted tables with styling and summary statistics
-- **Graceful fallback** - automatically switches to sequential processing if parallel processing isn't available
+### Reliability
+- **Error recovery** - Continues processing despite malformed entries
+- **Input validation** - Catches issues before processing
+- **Progress tracking** - Real-time status updates
+- **Detailed logging** - Comprehensive debugging information
 
-### v2.1 Performance & Reliability Improvements
-- **3-5x faster processing** with pre-compiled regex patterns
-- **Comprehensive error handling** - won't crash on malformed logs
-- **Input validation** - catches problems before they cause issues
-- **Memory monitoring** - tracks and optimizes memory usage
-- **Detailed logging** - see exactly what's happening with `-DebugMode`
-- **Robust recovery** - continues processing even when individual lines fail
-- **Enhanced progress tracking** - shows memory usage and processing stats
-
-## 📝 Example
+## 📝 Example Analysis
 
 ```powershell
-# Process a FortiAnalyzer log with progress tracking
-PS> .\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic-2024-01-15.log" -ShowProgress
+PS> .\FortiAnalyzer-Parser.ps1 -LogFilePath "traffic-2024.log" -ShowProgress -OutputFormat HTML
 
-=== FortiAnalyzer Log Parser ===
-Total lines to process: 50000
-Parsing log file: traffic-2024-01-15.log
-Grouping by subnets...
+=== FortiAnalyzer Log Parser v2.3 ===
+Enhanced with FortiGate policy generation and standardized naming
 
-=== Network Communication Summary ===
-SourceIP        DestIP          Service SourceInterface DestInterface SourceSubnet    DestSubnet
---------        ------          ------- --------------- ------------- ------------    ----------
-192.168.1.10    10.0.0.5        HTTP    internal        wan1          192.168.1.0/24  10.0.0.0/24
-192.168.1.15    8.8.8.8         DNS     internal        wan1          192.168.1.0/24  8.8.8.0/24
+[2024-01-15 10:30:45] Starting log file parsing: traffic-2024.log
+[2024-01-15 10:30:47] Parsing completed successfully
+[2024-01-15 10:30:47] Processing time: 2.3 seconds
+[2024-01-15 10:30:47] Lines processed: 50,000
+[2024-01-15 10:30:47] Connections parsed: 15,000
+[2024-01-15 10:30:47] Unique patterns found: 250
 
-Results exported to: NetworkTraffic.csv
-
-=== Summary ===
-Total connections parsed: 15000
-Unique connection patterns: 250
-Unique networks identified: 12
+=== Analysis Results ===
+Total Policies Required: 250
+Top Services: HTTP (45%), HTTPS (30%), DNS (15%), RDP (10%)
+Network Segments: 12 unique subnets identified
+Results exported to: firewall-report.html
 ```
 
 ## 🤝 Contributing
@@ -201,28 +249,42 @@ Unique networks identified: 12
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Something broken?
+## 🐛 Issues & Support
 
-If it's not working right:
-1. Check the [Issues](https://github.com/diyarit/fortianalyzer-parser/issues) page first
-2. If your problem isn't there, create a new issue
-3. Include some sample log lines (scrub out any sensitive stuff first)
+If something's not working:
+1. Check the [Issues](https://github.com/diyarit/fortianalyzer-parser/issues) page
+2. Create a new issue with sample log lines (remove sensitive data)
+3. Include error messages and system information
 
 ## 🔄 Version History
 
-- **v1.0.0** - Initial release with core parsing functionality
-- **v1.1.0** - Added progress tracking and memory optimization
-- **v1.2.0** - Enhanced subnet consolidation and service mapping
-- **v2.1.0** - **MAJOR UPDATE**: Enhanced error handling, performance optimization, and input validation
-  - Pre-compiled regex patterns for 3-5x performance improvement
-  - Comprehensive error handling with detailed logging
-  - Input validation for files, IP addresses, and port numbers
-  - Memory usage monitoring and optimization
-  - Enhanced progress tracking with memory usage display
-  - Debug mode for detailed logging and debugging
-  - Robust error recovery and graceful failure handling
+### v2.3.0 - FortiGate Policy Generation (Latest)
+- **🎯 Standardized policy naming** with FortiGate conventions
+- **📝 Clean TEXT output** with policy separators
+- **🎨 Enhanced HTML reports** with FortiGate-style interface
+- **🔄 Improved field ordering** across all output formats
+- **⚡ Smart service formatting** (TCP/port, UDP/port)
+- **🏷️ Action standardization** (accept → allow, deny → deny)
 
+### v2.2.0 - Multi-Format Support
+- **📊 Multiple output formats** - CSV, JSON, HTML, TEXT
+- **⚡ Parallel processing** - Multi-threaded analysis
+- **📱 Responsive HTML reports** - Mobile-friendly interface
+- **🔄 Graceful fallback** - Auto-switches processing modes
+
+### v2.1.0 - Performance & Reliability
+- **🚀 3-5x faster processing** with pre-compiled regex
+- **🛡️ Comprehensive error handling** - Won't crash on bad data
+- **✅ Input validation** - Catches problems early
+- **📊 Memory monitoring** - Tracks and optimizes usage
+- **🔍 Debug mode** - Detailed logging and diagnostics
+- **💪 Robust recovery** - Continues despite individual failures
+
+### v1.x.x - Foundation
+- Initial release with core parsing functionality
+- Progress tracking and memory optimization
+- Subnet consolidation and service mapping
 
 ---
 
-Built by someone who got tired of manually parsing FortiAnalyzer logs. Hope it saves you some time too.
+**Built by someone who got tired of manually parsing FortiAnalyzer logs. Hope it saves you time too! 🚀**

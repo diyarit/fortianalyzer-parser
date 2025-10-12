@@ -3,11 +3,12 @@
     FortiAnalyzer Log Parser
 .DESCRIPTION
     Parses FortiAnalyzer logs and extracts network traffic patterns for analysis.
-    Exports connection data to CSV, JSON, or HTML format for further review and analysis.
+    Exports connection data to CSV, JSON, HTML, or TEXT format for further review and analysis.
+    Generates FortiGate-ready policy recommendations with standardized naming conventions.
 .AUTHOR
     Diyar Abbas
 .VERSION
-    2.2
+    2.3
 #>
 
 #Requires -Version 5.1
@@ -20,7 +21,7 @@ param(
     [string]$OutputFile = "NetworkTraffic.csv",
     
     [Parameter(Mandatory=$false)]
-    [ValidateSet("CSV", "JSON", "HTML")]
+    [ValidateSet("CSV", "JSON", "HTML", "TEXT")]
     [string]$OutputFormat = "CSV",
     
     [Parameter(Mandatory=$false)]
@@ -817,12 +818,19 @@ function Process-LogChunk {
 
 function Export-NetworkData {
     param(
-        [string]$Format = "CSV",
-        [string]$OutputFile
+        [hashtable]$uniqueConnections,
+        [string]$outputFile,
+        [string]$outputFormat = "CSV",
+        [System.Collections.ArrayList]$connections,
+        [int]$processedLines = 0,
+        [int]$skippedLines = 0,
+        [double]$processingTime = 0,
+        [int]$errorCount = 0,
+        [int]$warningCount = 0
     )
     
     try {
-        Write-LogMessage "Preparing network data for export in $Format format..." "Info"
+        Write-LogMessage "Preparing network data for export in $outputFormat format..." "Info"
         
         $exportData = [System.Collections.ArrayList]::new()
         $exportCount = 0
@@ -832,21 +840,38 @@ function Export-NetworkData {
                 $data = $item.Value
                 $conn = $data.Connection
                 
+                # Generate standardized policy name following FortiGate naming convention
+                # Format: ALLOW/DENY_[SOURCE_INTERFACE]_TO_[DEST_INTERFACE]_[SERVICE]_[SOURCE_NET]_TO_[DEST_NET]
+                $actionPrefix = if ($conn.Action -eq 'accept') { 'ALLOW' } else { 'DENY' }
+                $sourceNet = ($conn.SourceSubnet -split '/')[0] -replace '\.', '_'
+                $destNet = ($conn.DestSubnet -split '/')[0] -replace '\.', '_'
+                $serviceClean = $conn.Service -replace '[^a-zA-Z0-9]', '_'
+                $sourceIntf = $conn.SourceInterface.ToUpper() -replace '[^a-zA-Z0-9]', '_'
+                $destIntf = $conn.DestInterface.ToUpper() -replace '[^a-zA-Z0-9]', '_'
+                
+                $policyName = "${actionPrefix}_${sourceIntf}_TO_${destIntf}_${serviceClean}_${sourceNet}_TO_${destNet}"
+                # Ensure policy name doesn't exceed FortiGate's 35 character limit for policy names
+                if ($policyName.Length -gt 35) {
+                    $policyName = "${actionPrefix}_${sourceIntf}_TO_${destIntf}_${serviceClean}"
+                }
+                
+                # Create record with standardized field order as specified
                 $record = [PSCustomObject]@{
+                    PolicyName = $policyName
+                    IncomingInterface = $conn.SourceInterface
+                    OutgoingInterface = $conn.DestInterface
+                    Source = $conn.SourceSubnet
+                    Destination = $conn.DestSubnet
+                    Service = $conn.Service
+                    Action = $conn.Action
+                    TrafficCount = $data.Count
+                    FirstSeen = $data.FirstSeen
+                    LastSeen = $data.LastSeen
                     SourceIP = $conn.SourceIP
                     DestinationIP = $conn.DestIP
                     SourcePort = $conn.SourcePort
                     DestinationPort = $conn.DestPort
-                    Service = $conn.Service
-                    SourceInterface = $conn.SourceInterface
-                    DestinationInterface = $conn.DestInterface
                     Protocol = $conn.Protocol
-                    Action = $conn.Action
-                    SourceSubnet = $conn.SourceSubnet
-                    DestinationSubnet = $conn.DestSubnet
-                    ConnectionCount = $data.Count
-                    FirstSeen = $data.FirstSeen
-                    LastSeen = $data.LastSeen
                 }
                 
                 [void]$exportData.Add($record)
@@ -858,90 +883,497 @@ function Export-NetworkData {
             }
         }
         
-        $sortedData = $exportData | Sort-Object ConnectionCount -Descending
+        $sortedData = $exportData | Sort-Object TrafficCount -Descending
         Write-LogMessage "Export data preparation completed: $exportCount records" "Info"
         
         # Export data in the specified format
-        switch ($Format.ToUpper()) {
+        switch ($outputFormat.ToUpper()) {
             "CSV" {
-                $sortedData | Export-Csv -Path $OutputFile -NoTypeInformation
-                Write-LogMessage "Data exported to CSV: $OutputFile" "Info"
+                $sortedData | Export-Csv -Path $outputFile -NoTypeInformation
+                Write-LogMessage "Data exported to CSV: $outputFile" "Info"
             }
             "JSON" {
                 $jsonOutput = $sortedData | ConvertTo-Json -Depth 4
-                [System.IO.File]::WriteAllText($OutputFile, $jsonOutput)
-                Write-LogMessage "Data exported to JSON: $OutputFile" "Info"
+                [System.IO.File]::WriteAllText($outputFile, $jsonOutput)
+                Write-LogMessage "Data exported to JSON: $outputFile" "Info"
             }
             "HTML" {
+                # Pre-calculate all dynamic values to avoid complex expressions in here-strings
+                $currentDate = Get-Date -Format "MMMM dd, yyyy 'at' HH:mm:ss"
+                $totalConnections = $connections.Count.ToString('N0')
+                $uniquePatterns = $uniqueConnections.Count.ToString('N0')
+                $processingTimeText = if($processingTime) { [Math]::Round($processingTime, 1).ToString() + 's' } else { 'N/A' }
+                $dataQualityText = if($processedLines -gt 0) { [Math]::Round((($processedLines - $skippedLines) / $processedLines * 100), 1).ToString() + '%' } else { 'N/A' }
+                $patternCount = $sortedData.Count
+                
                 $htmlHeader = @"
 <!DOCTYPE html>
 <html>
 <head>
     <title>FortiAnalyzer Network Traffic Analysis</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        h1 { color: #0066cc; }
-        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-        th { background-color: #0066cc; color: white; text-align: left; padding: 8px; }
-        td { border: 1px solid #ddd; padding: 8px; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-        tr:hover { background-color: #ddd; }
-        .summary { background-color: #f8f8f8; padding: 10px; border-left: 5px solid #0066cc; margin: 20px 0; }
-        .footer { margin-top: 20px; font-size: 0.8em; color: #666; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.4;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+            color: white;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .summary-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #4a90e2;
+        }
+        
+        .summary-card h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .summary-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #333;
+        }
+        
+        .table-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        .table-header h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .table-header .count {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        th {
+            background: #f8f9fa;
+            color: #495057;
+            font-weight: 600;
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 2px solid #dee2e6;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f1f3f4;
+            vertical-align: middle;
+        }
+        
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .device-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            border-radius: 2px;
+            text-align: center;
+            line-height: 16px;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .device-server { background-color: #28a745; }
+        .device-workstation { background-color: #007bff; }
+        .device-network { background-color: #6f42c1; }
+        .device-external { background-color: #fd7e14; }
+        
+        .flag {
+            display: inline-block;
+            width: 16px;
+            height: 12px;
+            margin-right: 6px;
+            border-radius: 2px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        }
+        
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .status-accept {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-deny {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-unknown {
+            background-color: #e2e3e5;
+            color: #383d41;
+        }
+        
+        .service-tag {
+            display: inline-block;
+            background-color: #e9ecef;
+            color: #495057;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .timestamp {
+            color: #6c757d;
+            font-size: 12px;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #6c757d;
+            font-size: 12px;
+            border-top: 1px solid #e9ecef;
+            margin-top: 20px;
+        }
+        
+        .interface-badge {
+            display: inline-block;
+            background-color: #f8f9fa;
+            color: #495057;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: 500;
+            border: 1px solid #dee2e6;
+        }
+        
+        .policy-name {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 12px;
+        }
+        
+        .interface-incoming {
+            background-color: #e3f2fd;
+            color: #1565c0;
+            border-color: #90caf9;
+        }
+        
+        .interface-outgoing {
+            background-color: #f3e5f5;
+            color: #7b1fa2;
+            border-color: #ce93d8;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            table {
+                font-size: 11px;
+            }
+            
+            th, td {
+                padding: 8px 12px;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>FortiAnalyzer Network Traffic Analysis</h1>
-    <div class="summary">
-        <p><strong>Total Connections:</strong> $($connections.Count)</p>
-        <p><strong>Unique Connection Patterns:</strong> $($uniqueConnections.Count)</p>
-        <p><strong>Generated:</strong> $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")</p>
+    <div class="header">
+        <h1>FortiAnalyzer Network Traffic Analysis</h1>
+        <div class="subtitle">Generated on $currentDate</div>
     </div>
-    <table>
-        <tr>
-            <th>Source Subnet</th>
-            <th>Destination Subnet</th>
-            <th>Service</th>
-            <th>Count</th>
-            <th>Source Interface</th>
-            <th>Destination Interface</th>
-            <th>Action</th>
-            <th>First Seen</th>
-            <th>Last Seen</th>
-        </tr>
+    
+    <div class="container">
+        <div class="summary-cards">
+            <div class="summary-card">
+                <h3>Total Traffic Flows</h3>
+                <div class="value">$totalConnections</div>
+            </div>
+            <div class="summary-card">
+                <h3>Policies Required</h3>
+                <div class="value">$uniquePatterns</div>
+            </div>
+            <div class="summary-card">
+                <h3>Processing Time</h3>
+                <div class="value">$processingTimeText</div>
+            </div>
+            <div class="summary-card">
+                <h3>Data Quality</h3>
+                <div class="value">$dataQualityText</div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-header">
+                <h2>Recommended Firewall Policies</h2>
+                <div class="count">Showing $patternCount unique traffic patterns for policy implementation</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Policy Name</th>
+                        <th>Incoming Interface</th>
+                        <th>Outgoing Interface</th>
+                        <th>Source</th>
+                        <th>Destination</th>
+                        <th>Service/Services</th>
+                        <th>Action</th>
+                        <th>Traffic Count</th>
+                    </tr>
+                </thead>
+                <tbody>
 "@
 
                 $htmlRows = ""
                 foreach ($item in $sortedData) {
+                    # Determine device icon based on source subnet
+                    $sourceIcon = if ($item.Source -match '^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[01])\.') { 
+                        '<span class="device-icon device-workstation">&#128187;</span>' 
+                    } elseif ($item.Source -match '^172\.|^10\.') { 
+                        '<span class="device-icon device-server">&#128421;</span>' 
+                    } else { 
+                        '<span class="device-icon device-external">&#127760;</span>' 
+                    }
+                    
+                    # Determine destination icon
+                    $destIcon = if ($item.Destination -match '^8\.8\.|^1\.1\.|^208\.67\.') { 
+                        '<span class="flag"></span>' 
+                    } elseif ($item.Destination -match '^192\.168\.|^10\.|^172\.(1[6-9]|2[0-9]|3[01])\.') { 
+                        '<span class="device-icon device-network">&#127970;</span>' 
+                    } else { 
+                        '<span class="flag"></span>' 
+                    }
+                    
+                    # Format action status
+                    $actionClass = switch ($item.Action) {
+                        'accept' { 'status-accept' }
+                        'deny' { 'status-deny' }
+                        default { 'status-unknown' }
+                    }
+                    
+                    $actionText = switch ($item.Action) {
+                        'accept' { '&#10003; Accept' }
+                        'deny' { '&#10007; Deny' }
+                        default { '? Unknown' }
+                    }
+                    
+                    # Use the new field names from the updated data structure
+                    $timestamp = $item.FirstSeen.ToString('yyyy/MM/dd HH:mm:ss')
+                    $sourceSubnet = $item.Source
+                    $destSubnet = $item.Destination
+                    $service = $item.Service
+                    $sourceInterface = $item.IncomingInterface
+                    $destInterface = $item.OutgoingInterface
+                    $connectionCount = $item.TrafficCount.ToString('N0')
+                    $policyName = $item.PolicyName
+                    
                     $htmlRows += @"
-        <tr>
-            <td>$($item.SourceSubnet)</td>
-            <td>$($item.DestinationSubnet)</td>
-            <td>$($item.Service)</td>
-            <td>$($item.ConnectionCount)</td>
-            <td>$($item.SourceInterface)</td>
-            <td>$($item.DestinationInterface)</td>
-            <td>$($item.Action)</td>
-            <td>$($item.FirstSeen)</td>
-            <td>$($item.LastSeen)</td>
-        </tr>
+                    <tr>
+                        <td><span class="policy-name">$policyName</span></td>
+                        <td>
+                            <span class="interface-badge interface-incoming">$sourceInterface</span>
+                        </td>
+                        <td>
+                            <span class="interface-badge interface-outgoing">$destInterface</span>
+                        </td>
+                        <td>
+                            $sourceIcon
+                            <strong>$sourceSubnet</strong>
+                        </td>
+                        <td>
+                            $destIcon
+                            <strong>$destSubnet</strong>
+                        </td>
+                        <td>
+                            <span class="service-tag">$service</span>
+                        </td>
+                        <td>
+                            <span class="status-badge $actionClass">$actionText</span>
+                        </td>
+                        <td><strong>$connectionCount</strong></td>
+                    </tr>
 "@
                 }
 
+                # Build footer text safely
+                $processedText = $processedLines.ToString('N0')
+                $footerStats = ""
+                if ($errorCount -gt 0) {
+                    $footerStats += "$errorCount errors"
+                }
+                if ($warningCount -gt 0) {
+                    if ($footerStats) { $footerStats += ", " }
+                    $footerStats += "$warningCount warnings"
+                }
+                if (-not $footerStats) { $footerStats = "No errors or warnings" }
+                
                 $htmlFooter = @"
-    </table>
-    <p class="footer">Generated by FortiAnalyzer Log Parser v2.2</p>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="footer">
+            Generated by FortiAnalyzer Log Parser v2.3 | 
+            Processed $processedText log entries | 
+            $footerStats
+        </div>
+    </div>
 </body>
 </html>
 "@
 
                 $htmlContent = $htmlHeader + $htmlRows + $htmlFooter
-                [System.IO.File]::WriteAllText($OutputFile, $htmlContent)
-                Write-LogMessage "Data exported to HTML: $OutputFile" "Info"
+                [System.IO.File]::WriteAllText($outputFile, $htmlContent)
+                Write-LogMessage "Data exported to HTML: $outputFile" "Info"
+            }
+            "TEXT" {
+                # Generate clean FortiGate log analysis results
+                $textHeader = @"
+=== FORTIGATE LOG ANALYSIS RESULTS ===
+
+Analysis Date: $currentDate
+Total Traffic Flows Analyzed: $totalConnections
+Unique Policy Patterns: $uniquePatterns
+Processing Time: $processingTimeText
+Data Quality: $dataQualityText
+
+"@
+                
+                $textContent = $textHeader
+                
+                $policyIndex = 0
+                foreach ($item in $sortedData) {
+                    # Format service name to match the example (TCP/port format when applicable)
+                    $serviceFormatted = $item.Service
+                    if ($item.Protocol -eq "6" -and $item.Service -notmatch "^(HTTP|HTTPS|DNS|RDP|SSH|FTP|SMTP)$") {
+                        $serviceFormatted = "TCP/$($item.DestinationPort)"
+                    } elseif ($item.Protocol -eq "17" -and $item.Service -notmatch "^(DNS|DHCP|SNMP)$") {
+                        $serviceFormatted = "UDP/$($item.DestinationPort)"
+                    }
+                    
+                    # Format action to match the example style
+                    $actionFormatted = switch ($item.Action) {
+                        'accept' { 'allow' }
+                        'deny' { 'deny' }
+                        default { $item.Action }
+                    }
+                    
+                    $textContent += @"
+Policy: $($item.PolicyName)
+Source: $($item.Source)
+Source Interface: $($item.IncomingInterface)
+Destination: $($item.Destination)
+Outgoing Interface: $($item.OutgoingInterface)
+Services: $serviceFormatted
+Action: $actionFormatted
+Traffic Count: $($item.TrafficCount)
+"@
+                    
+                    # Add separator between entries (but not after the last one)
+                    $policyIndex++
+                    if ($policyIndex -lt $sortedData.Count) {
+                        $textContent += "`n============================`n"
+                    } else {
+                        $textContent += "`n"
+                    }
+                }
+                
+                $textFooter = @"
+=== ANALYSIS SUMMARY ===
+Total Policies Required: $($sortedData.Count)
+Log Entries Processed: $processedText
+$footerStats
+
+Generated by FortiAnalyzer Log Parser v2.3
+"@
+                
+                $textContent += $textFooter
+                [System.IO.File]::WriteAllText($outputFile, $textContent)
+                Write-LogMessage "Data exported to TEXT: $outputFile" "Info"
             }
             default {
-                Write-LogMessage "Unsupported export format: $Format. Defaulting to CSV." "Warning"
-                $sortedData | Export-Csv -Path $OutputFile -NoTypeInformation
+                Write-LogMessage "Unsupported export format: $outputFormat. Defaulting to CSV." "Warning"
+                $sortedData | Export-Csv -Path $outputFile -NoTypeInformation
             }
         }
         
@@ -955,7 +1387,7 @@ function Export-NetworkData {
 
 # Main execution
 try {
-    Write-Host "=== FortiAnalyzer Log Parser v2.2 ===" -ForegroundColor Magenta
+    Write-Host "=== FortiAnalyzer Log Parser v2.3 ===" -ForegroundColor Magenta
     Write-Host "Enhanced with error handling, performance optimization, and input validation" -ForegroundColor Gray
     Write-Host ""
     
@@ -983,7 +1415,7 @@ try {
     
     # Export network data
     Write-LogMessage "Starting data export..." "Info"
-    $networkData = Export-NetworkData -uniqueConnections $uniqueConnections -outputFile $OutputFile -outputFormat $OutputFormat
+    $networkData = Export-NetworkData -uniqueConnections $uniqueConnections -outputFile $OutputFile -outputFormat $OutputFormat -connections $connections -processedLines $processedLines -skippedLines $skippedLines -processingTime $processingTime -errorCount $errorCount -warningCount $warningCount
     
     # Display results
     Write-Host "`n=== Network Traffic Analysis ===" -ForegroundColor Green
