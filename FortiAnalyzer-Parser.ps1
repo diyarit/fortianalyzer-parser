@@ -57,16 +57,157 @@ $ipValidationRegex = [regex]::new('^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\
 # Port validation regex (1-65535)
 $portValidationRegex = [regex]::new('^([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$', [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
-# Service name mappings for common ports
+# Comprehensive service name mappings for well-known ports
+# Based on IANA port assignments and common enterprise services
 $serviceMappings = @{
+    # Core Internet Services
+    '13' = 'DAYTIME'
+    '20' = 'FTP-DATA'
+    '21' = 'FTP'
+    '22' = 'SSH'
+    '23' = 'TELNET'
+    '25' = 'SMTP'
+    '37' = 'TIME'
     '53' = 'DNS'
+    '67' = 'DHCP-SERVER'
+    '68' = 'DHCP-CLIENT'
+    '69' = 'TFTP'
+    '79' = 'FINGER'
     '80' = 'HTTP'
+    '110' = 'POP3'
+    '111' = 'PORTMAPPER'
+    '119' = 'NNTP'
+    '123' = 'NTP'
+    '143' = 'IMAP'
+    '161' = 'SNMP'
+    '162' = 'SNMP-TRAP'
+    '179' = 'BGP'
+    '194' = 'IRC'
+    '199' = 'SMUX'
+    '220' = 'IMAP3'
+    '389' = 'LDAP'
     '443' = 'HTTPS'
-    '135' = 'DCE-RPC'
+    '465' = 'SMTPS'
+    '500' = 'ISAKMP'
+    '514' = 'SYSLOG'
+    '515' = 'LPR'
+    '520' = 'RIP'
+    '521' = 'RIPNG'
+    '587' = 'SMTP-SUBMISSION'
+    '631' = 'IPP'
+    '636' = 'LDAPS'
+    '646' = 'LDP'
+    '873' = 'RSYNC'
+    '989' = 'FTPS-DATA'
+    '990' = 'FTPS'
+    '993' = 'IMAPS'
+    '995' = 'POP3S'
+    '1080' = 'SOCKS'
+    '1194' = 'OPENVPN'
+    '1645' = 'RADIUS-AUTH-OLD'
+    '1646' = 'RADIUS-ACCT-OLD'
+    '1720' = 'H323'
+    '1723' = 'PPTP'
+    '1812' = 'RADIUS-AUTH'
+    '1813' = 'RADIUS-ACCT'
+    
+    # Microsoft Services
+    '135' = 'MS-RPC'
+    '137' = 'NETBIOS-NS'
+    '138' = 'NETBIOS-DGM'
+    '139' = 'NETBIOS-SSN'
+    '445' = 'SMB'
+    '1433' = 'MSSQL'
+    '1434' = 'MSSQL-MONITOR'
     '3389' = 'RDP'
-    '9100' = 'TCP-9100'
-    '7680' = 'tcp/7680'
-    '9396' = 'VeeamConsole'
+    '5985' = 'WINRM-HTTP'
+    '5986' = 'WINRM-HTTPS'
+    
+    # Database Services
+    '1521' = 'ORACLE'
+    '1522' = 'ORACLE-TNS'
+    '3306' = 'MYSQL'
+    '5432' = 'POSTGRESQL'
+    '6379' = 'REDIS'
+    '27017' = 'MONGODB'
+    '9042' = 'CASSANDRA'
+    '7000' = 'CASSANDRA-INTER'
+    '11211' = 'MEMCACHED'
+    
+    # Web Services & APIs
+    '3000' = 'GRAFANA'
+    '4000' = 'HTTP-4000'
+    '5000' = 'DOCKER-REGISTRY'
+    '8000' = 'HTTP-8000'
+    '8008' = 'HTTP-8008'
+    '8080' = 'HTTP-ALT'
+    '8081' = 'NEXUS'
+    '8086' = 'INFLUXDB'
+    '8443' = 'HTTPS-ALT'
+    '9000' = 'SONARQUBE'
+    '9090' = 'PROMETHEUS'
+    '9100' = 'PROMETHEUS-NODE'
+    
+    # VPN & Security
+    '4500' = 'IPSEC-NAT-T'
+    '10000' = 'WEBMIN'
+    
+    # Monitoring & Management
+    '2049' = 'NFS'
+    '2161' = 'APC-AGENT'
+    '3128' = 'SQUID-PROXY'
+    '3260' = 'ISCSI'
+    '5666' = 'NRPE'
+    '6556' = 'CHECK-MK'
+    
+    # Virtualization
+    '902' = 'VMWARE-AUTH'
+    '903' = 'VMWARE-CONSOLE'
+    '5480' = 'VCENTER-MGMT'
+    '8006' = 'PROXMOX'
+    '16509' = 'LIBVIRT'
+    
+    # Backup & Storage
+    '9392' = 'VEEAM-BACKUP'
+    '9393' = 'VEEAM-REPLICATION'
+    '9394' = 'VEEAM-INSTALLER'
+    '9395' = 'VEEAM-DEPLOYER'
+    '9396' = 'VEEAM-CONSOLE'
+    '9397' = 'VEEAM-MOUNT'
+    '9398' = 'VEEAM-CLOUD'
+    
+    # VoIP & Communication
+    '2000' = 'CISCO-SCCP'
+    '3478' = 'STUN'
+    '5060' = 'SIP'
+    '5061' = 'SIPS'
+    '5222' = 'XMPP-CLIENT'
+    '5269' = 'XMPP-SERVER'
+    '5349' = 'STUNS'
+    
+    # Gaming & Entertainment
+    '3724' = 'WOW'
+    '6112' = 'BATTLE-NET'
+    '7777' = 'UNREAL'
+    '25565' = 'MINECRAFT'
+    '27015' = 'STEAM-GAME'
+    
+    # Development & CI/CD
+    '2375' = 'DOCKER-DAEMON'
+    '2376' = 'DOCKER-DAEMON-TLS'
+    '2379' = 'ETCD-CLIENT'
+    '2380' = 'ETCD-PEER'
+    '4646' = 'NOMAD'
+    '6443' = 'KUBERNETES-API'
+    '10250' = 'KUBELET'
+    
+    # Cloud Services
+    '5044' = 'LOGSTASH'
+    '5601' = 'KIBANA'
+    '8200' = 'VAULT'
+    '8500' = 'CONSUL'
+    '9200' = 'ELASTICSEARCH'
+    '9300' = 'ELASTICSEARCH-TRANSPORT'
 }
 
 # Initialize collections
@@ -462,10 +603,8 @@ function Parse-LogFile {
                         function Get-ServiceName {
                             param([string]$port, [string]$protocol)
                             if ([string]::IsNullOrWhiteSpace($port)) { return "unknown" }
-                            $serviceMappings = @{
-                                '53' = 'DNS'; '80' = 'HTTP'; '443' = 'HTTPS'; '135' = 'DCE-RPC'
-                                '3389' = 'RDP'; '9100' = 'TCP-9100'; '7680' = 'tcp/7680'; '9396' = 'VeeamConsole'
-                            }
+                            # Use the global service mappings defined at the top of the script
+                            # This ensures consistency across all processing modes
                             if ($serviceMappings.ContainsKey($port)) { return $serviceMappings[$port] }
                             return "tcp/$port"
                         }
@@ -1323,12 +1462,35 @@ Data Quality: $dataQualityText
                 
                 $policyIndex = 0
                 foreach ($item in $sortedData) {
-                    # Format service name to match the example (TCP/port format when applicable)
+                    # Format service name using comprehensive service mapping
                     $serviceFormatted = $item.Service
-                    if ($item.Protocol -eq "6" -and $item.Service -notmatch "^(HTTP|HTTPS|DNS|RDP|SSH|FTP|SMTP)$") {
-                        $serviceFormatted = "TCP/$($item.DestinationPort)"
-                    } elseif ($item.Protocol -eq "17" -and $item.Service -notmatch "^(DNS|DHCP|SNMP)$") {
-                        $serviceFormatted = "UDP/$($item.DestinationPort)"
+                    
+                    # List of well-known services that should be displayed by name
+                    $knownServices = @(
+                        'HTTP', 'HTTPS', 'FTP', 'FTPS', 'SSH', 'TELNET', 'SMTP', 'SMTPS', 'POP3', 'POP3S', 
+                        'IMAP', 'IMAPS', 'DNS', 'DHCP', 'TFTP', 'NTP', 'SNMP', 'LDAP', 'LDAPS', 'SMB', 
+                        'RDP', 'VNC', 'MYSQL', 'POSTGRESQL', 'ORACLE', 'MSSQL', 'REDIS', 'MONGODB',
+                        'SIP', 'H323', 'XMPP', 'IRC', 'NNTP', 'BGP', 'OSPF', 'RIP', 'RADIUS', 'TACACS',
+                        'SYSLOG', 'NFS', 'CIFS', 'AFP', 'RSYNC', 'ISCSI', 'OPENVPN', 'PPTP', 'L2TP',
+                        'PROMETHEUS', 'GRAFANA', 'ELASTICSEARCH', 'KIBANA', 'INFLUXDB', 'JENKINS',
+                        'DOCKER', 'KUBERNETES', 'CONSUL', 'VAULT', 'ETCD', 'VEEAM', 'VMWARE'
+                    )
+                    
+                    # If service is not in known list, format as protocol/port
+                    if ($item.Protocol -eq "6" -and $item.Service -notin $knownServices) {
+                        # Check if it's in our service mappings first
+                        if ($serviceMappings.ContainsKey($item.DestinationPort)) {
+                            $serviceFormatted = $serviceMappings[$item.DestinationPort]
+                        } else {
+                            $serviceFormatted = "TCP/$($item.DestinationPort)"
+                        }
+                    } elseif ($item.Protocol -eq "17" -and $item.Service -notin $knownServices) {
+                        # Check if it's in our service mappings first
+                        if ($serviceMappings.ContainsKey($item.DestinationPort)) {
+                            $serviceFormatted = $serviceMappings[$item.DestinationPort]
+                        } else {
+                            $serviceFormatted = "UDP/$($item.DestinationPort)"
+                        }
                     }
                     
                     # Format action to match the example style

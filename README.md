@@ -7,7 +7,7 @@ Transform thousands of FortiAnalyzer log entries into actionable FortiGate firew
 - **Parses FortiAnalyzer logs** and extracts network traffic patterns
 - **Groups IP addresses into subnets** for cleaner policy management (192.168.1.0/24 instead of individual IPs)
 - **Identifies traffic flows** between interfaces with source/destination mapping
-- **Translates ports to services** (port 80 → HTTP, port 443 → HTTPS, etc.)
+- **Translates ports to services** (150+ well-known services: HTTP, HTTPS, SSH, RDP, databases, etc.)
 - **Generates FortiGate-ready policies** with standardized naming conventions
 - **Multiple output formats** (CSV, JSON, HTML, TEXT) for different use cases
 - **Parallel processing** for faster analysis of large log files
@@ -171,6 +171,38 @@ Structured data for API integration and programmatic processing with complete me
 - **Efficient firewall implementation** with ready-to-use names
 - **Easier policy maintenance** and troubleshooting
 - **Consistent naming** across all network devices
+
+## 🔍 Comprehensive Service Recognition
+
+The parser includes **150+ well-known service mappings** for accurate identification:
+
+### Core Internet Services
+- **Web**: HTTP (80), HTTPS (443), HTTP-ALT (8080), HTTPS-ALT (8443)
+- **Email**: SMTP (25), POP3 (110), IMAP (143), SMTPS (465), IMAPS (993), POP3S (995)
+- **File Transfer**: FTP (21), SFTP (22), FTPS (990), TFTP (69), RSYNC (873)
+- **Network**: DNS (53), DHCP (67/68), NTP (123), SNMP (161/162), SYSLOG (514)
+
+### Enterprise Services
+- **Microsoft**: RDP (3389), SMB (445), MS-RPC (135), MSSQL (1433), WinRM (5985/5986)
+- **Databases**: MySQL (3306), PostgreSQL (5432), Oracle (1521), Redis (6379), MongoDB (27017)
+- **Virtualization**: VMware (902/903), vCenter (443/5480), Proxmox (8006), Libvirt (16509)
+- **Backup**: Veeam (9392-9398), NFS (2049), iSCSI (3260)
+
+### Security & VPN
+- **VPN**: OpenVPN (1194), PPTP (1723), IPSec (500/4500), ISAKMP (500)
+- **Authentication**: RADIUS (1812/1813), LDAP (389), LDAPS (636), Kerberos (88)
+- **Monitoring**: Prometheus (9090), Grafana (3000), NRPE (5666), Check_MK (6556)
+
+### Development & Cloud
+- **Containers**: Docker (2375/2376), Kubernetes (6443), Registry (5000)
+- **CI/CD**: Jenkins (8080), Nexus (8081), SonarQube (9000)
+- **Cloud**: Elasticsearch (9200), Kibana (5601), Consul (8500), Vault (8200)
+
+### Communication & VoIP
+- **VoIP**: SIP (5060/5061), H.323 (1720), SCCP (2000), STUN (3478)
+- **Messaging**: XMPP (5222/5269), IRC (194), Teams (8443)
+
+**Unknown services** are automatically formatted as `TCP/port` or `UDP/port` for clear identification.
 
 ## 🔍 Supported Log Format
 
