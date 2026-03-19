@@ -279,14 +279,14 @@ $script:serviceMappings = @{
                 <!-- Row 0: Source IP | Dest IP | Service | Action -->
                 <TextBlock Text="Src IP / Prefix:" VerticalAlignment="Center" Foreground="#374151" Margin="0,0,8,0"/>
                 <TextBox Name="txtFilterSrcIP" Grid.Column="1" Height="28"
-                         ToolTip="Partial match - e.g. 192.168.1 matches any IP starting with 192.168.1"/>
+                         ToolTip="Enter exact IP (e.g. 10.1.10.2). Tries exact match first; if no results, falls back to subnet prefix match."/>
                 <Button Name="btnClearSrcIP" Grid.Column="2" Content="x" Style="{StaticResource DangerBtn}"
                         Height="22" Width="20" FontSize="10" Padding="0" Margin="2,0,0,0"
                         ToolTip="Clear source IP filter"/>
 
                 <TextBlock Text="Dst IP / Prefix:" Grid.Column="3" VerticalAlignment="Center" Foreground="#374151" Margin="16,0,8,0"/>
                 <TextBox Name="txtFilterDstIP" Grid.Column="4" Height="28"
-                         ToolTip="Partial match - e.g. 10.0 matches any IP starting with 10.0"/>
+                         ToolTip="Exact IP match (e.g. 10.0.5.1). Output shows the IP directly; unfiltered results show the subnet."/>
                 <Button Name="btnClearDstIP" Grid.Column="5" Content="x" Style="{StaticResource DangerBtn}"
                         Height="22" Width="20" FontSize="10" Padding="0" Margin="2,0,0,0"
                         ToolTip="Clear destination IP filter"/>
@@ -673,9 +673,10 @@ $btnRun.Add_Click({
             try {
                 $o = $IP -split '\.'
                 if ($o.Count -ne 4) { return $IP }
-                $ipInt = ([int]$o[0] -shl 24) -bor ([int]$o[1] -shl 16) -bor ([int]$o[2] -shl 8) -bor [int]$o[3]
-                $mask  = if ($Bits -eq 0) { 0 } else { [int]([uint32]::MaxValue -shl (32 - $Bits)) }
-                $net   = $ipInt -band $mask
+                # Use [uint32] to avoid signed integer overflow on masks >= /1
+                [uint32]$ipInt = ([uint32]$o[0] -shl 24) -bor ([uint32]$o[1] -shl 16) -bor ([uint32]$o[2] -shl 8) -bor [uint32]$o[3]
+                [uint32]$mask  = if ($Bits -eq 0) { 0 } else { [uint32]::MaxValue -shl (32 - $Bits) }
+                [uint32]$net   = $ipInt -band $mask
                 return "$(($net -shr 24) -band 0xFF).$(($net -shr 16) -band 0xFF).$(($net -shr 8) -band 0xFF).$($net -band 0xFF)/$Bits"
             } catch { return $IP }
         }
@@ -708,23 +709,60 @@ $btnRun.Add_Click({
         # by checking that the filter string is all digits, then compared
         # directly against $DstPort.  Non-numeric input is matched against
         # the resolved service name (case-insensitive wildcard).
-        function Test-Filters {
-            param($SrcIP, $DstIP, $DstPort, $SvcName, $Action,
-                  $FSrcIP, $FDstIP, $FSvc, $FAction)
+        function Test-ServiceAction {
+            # Service/action filter - applied during parse for efficiency.
+            # IP filtering happens after parse with exact-then-subnet fallback.
+            #
+            # Service filter rules:
+            #   - All digits (e.g. "443"): exact match on raw destination port
+            #   - Text (e.g. "HTTPS"):     matches raw log service field AND
+            #     resolved service name; exact first, partial (contains) fallback
+            param($RawService, $DstPort, $SvcName, $Action, $FSvc, $FAction)
 
-            if ($FSrcIP -and $SrcIP -notlike "*$FSrcIP*") { return $false }
-            if ($FDstIP -and $DstIP -notlike "*$FDstIP*") { return $false }
             if ($FSvc) {
                 if ($FSvc -match '^\d+$') {
-                    # Numeric input - match against the raw destination port
                     if ($DstPort -ne $FSvc) { return $false }
                 } else {
-                    # Text input - match against resolved service name
-                    if ($SvcName -notlike "*$FSvc*") { return $false }
+                    $fUpper   = $FSvc.ToUpper()
+                    $rawUpper = $RawService.ToUpper()
+                    $exactMatch   = ($rawUpper -eq $fUpper) -or ($SvcName -eq $fUpper)
+                    $partialMatch = ($rawUpper -like "*$fUpper*") -or ($SvcName -like "*$fUpper*")
+                    if (-not $exactMatch -and -not $partialMatch) { return $false }
                 }
             }
             if ($FAction -and $Action -ne $FAction) { return $false }
             return $true
+        }
+
+        function Select-ByIPFilter {
+            # Post-parse IP filtering: exact match first, subnet fallback.
+            param($UniqueConns, $FSrcIP, $FDstIP)
+            if (-not $FSrcIP -and -not $FDstIP) { return $UniqueConns }
+
+            # Pass 1: exact IP match
+            $exact = @{}
+            foreach ($kv in $UniqueConns.GetEnumerator()) {
+                $conn = $kv.Value.Connection
+                $s = (-not $FSrcIP) -or ($conn.SourceIP -eq $FSrcIP)
+                $d = (-not $FDstIP) -or ($conn.DestIP   -eq $FDstIP)
+                if ($s -and $d) { $exact[$kv.Key] = $kv.Value }
+            }
+            if ($exact.Count -gt 0) {
+                Write-UILog "IP filter: exact match - $($exact.Count) pattern(s)."
+                return $exact
+            }
+
+            # Pass 2: subnet/prefix fallback
+            Write-UILog "IP filter: no exact matches - trying subnet prefix fallback."
+            $sub = @{}
+            foreach ($kv in $UniqueConns.GetEnumerator()) {
+                $conn = $kv.Value.Connection
+                $s = (-not $FSrcIP) -or ($conn.SourceSubnet -like "*$FSrcIP*") -or ($conn.SourceIP -like "$FSrcIP*")
+                $d = (-not $FDstIP) -or ($conn.DestSubnet   -like "*$FDstIP*") -or ($conn.DestIP   -like "$FDstIP*")
+                if ($s -and $d) { $sub[$kv.Key] = $kv.Value }
+            }
+            Write-UILog "IP filter: subnet fallback - $($sub.Count) pattern(s)."
+            return $sub
         }
 
         # -- Variables -------------------------------------------------------
@@ -748,8 +786,8 @@ $btnRun.Add_Click({
 
         # Build human-readable filter summary for log/reports
         $filterParts = @()
-        if ($fSrcIP)   { $filterParts += "SrcIP contains '$fSrcIP'" }
-        if ($fDstIP)   { $filterParts += "DstIP contains '$fDstIP'" }
+        if ($fSrcIP)   { $filterParts += "SrcIP = '$fSrcIP'" }
+        if ($fDstIP)   { $filterParts += "DstIP = '$fDstIP'" }
         if ($fService) {
             if ($fService -match '^\d+$') {
                 $filterParts += "Port = $fService"
@@ -787,14 +825,25 @@ $btnRun.Add_Click({
                 $mProto   = $pats.proto.Match($line)
 
                 $serviceRaw = if ($mSvcRaw.Success) { $mSvcRaw.Groups[1].Value } else { "" }
-                $action     = if ($mAct.Success)    { $mAct.Groups[1].Value }    else { "" }
                 $proto      = if ($mProto.Success)  { $mProto.Groups[1].Value }  else { "" }
+                # Normalise: FortiAnalyzer writes "close"/"server-rst"/"client-rst"
+                # for completed allowed sessions - treat all as "accept"
+                $action = if ($mAct.Success) {
+                    switch ($mAct.Groups[1].Value.ToLower()) {
+                        "close"      { "accept" }
+                        "accept"     { "accept" }
+                        "deny"       { "deny"   }
+                        "server-rst" { "accept" }
+                        "client-rst" { "accept" }
+                        default      { $mAct.Groups[1].Value }
+                    }
+                } else { "" }
                 $svcName    = Get-SvcName $dstport $proto $serviceRaw $maps
 
-                # Apply filters BEFORE creating the full connection object
-                # This keeps memory low on large files with narrow filters
-                if (-not (Test-Filters $srcip $dstip $dstport $svcName $action `
-                                        $fSrcIP $fDstIP $fService $fAction)) {
+                # Service/action filter applied during parse (fast path).
+                # IP filter applied post-parse with exact/subnet fallback.
+                if (-not (Test-ServiceAction $serviceRaw $dstport $svcName $action `
+                                              $fService $fAction)) {
                     $skippedFilter++
                     continue
                 }
@@ -853,12 +902,16 @@ $btnRun.Add_Click({
 
         Write-UILog "Parse complete: $lineNum lines read, $($uniqueConns.Count) unique patterns matched, $skippedFilter lines excluded by filters."
 
+        # -- IP filter (post-parse: exact first, subnet fallback) ------------
+
+        $filteredConns = Select-ByIPFilter $uniqueConns $fSrcIP $fDstIP
+
         # -- Export ----------------------------------------------------------
 
         $UI.Window.Dispatcher.Invoke([Action]{ $UI.Status.Text = "Exporting data..." })
 
         $exportList = [System.Collections.ArrayList]::new()
-        foreach ($kv in $uniqueConns.GetEnumerator()) {
+        foreach ($kv in $filteredConns.GetEnumerator()) {
             $d = $kv.Value; $c = $d.Connection
             [void]$exportList.Add([PSCustomObject]@{
                 PolicyName        = $c.PolicyName
@@ -900,8 +953,10 @@ $btnRun.Add_Click({
             "TEXT" {
                 $ts2         = [DateTime]::Now.ToString("MMMM dd, yyyy 'at' HH:mm:ss")
                 $totalFlows  = $lineNum.ToString('N0')
-                $uniqueCount = $uniqueConns.Count.ToString('N0')
+                $uniqueCount = $filteredConns.Count.ToString('N0')
                 $skippedStr  = $skippedFilter.ToString('N0')
+                # Safe count - sorted can be single object or array
+                $policyCount = if ($sorted -is [array]) { $sorted.Count } elseif ($null -ne $sorted) { 1 } else { 0 }
 
                 $sb = [System.Text.StringBuilder]::new()
                 [void]$sb.AppendLine("=== FORTIGATE LOG ANALYSIS RESULTS v3.1.0 ===")
@@ -926,7 +981,7 @@ $btnRun.Add_Click({
                 }
                 [void]$sb.AppendLine("")
                 [void]$sb.AppendLine("=== SUMMARY ===")
-                [void]$sb.AppendLine("Policies Required : $($sorted.Count)")
+                [void]$sb.AppendLine("Policies Required : $policyCount")
                 [void]$sb.AppendLine("Generated by FortiAnalyzer Log Parser GUI v3.1.0-WPF")
                 [System.IO.File]::WriteAllText($out, $sb.ToString(), [System.Text.Encoding]::UTF8)
                 Write-UILog "TEXT written: $out"
@@ -934,7 +989,7 @@ $btnRun.Add_Click({
             "HTML" {
                 $ts2         = [DateTime]::Now.ToString("MMMM dd, yyyy 'at' HH:mm:ss")
                 $totalFlows  = $lineNum.ToString('N0')
-                $uniqueCount = $uniqueConns.Count.ToString('N0')
+                $uniqueCount = $filteredConns.Count.ToString('N0')
                 $skippedStr  = $skippedFilter.ToString('N0')
                 $filterHtml  = Encode-Html $filterSummary
 
@@ -1035,7 +1090,7 @@ $btnRun.Add_Click({
         $UI.LastOutputPath.Value = $out
         $UI.Window.Dispatcher.Invoke([Action]{
             $UI.ProgressBar.Value        = 100
-            $UI.Status.Text              = "Complete - $($uniqueConns.Count) policies / $lineNum lines / $skippedFilter excluded"
+            $UI.Status.Text              = "Complete - $($filteredConns.Count) policies / $lineNum lines / $skippedFilter excluded"
             $UI.BtnRun.IsEnabled         = $true
             $UI.BtnRun.Content           = ">  START ANALYSIS"
             $UI.BtnCancel.IsEnabled      = $false
@@ -1046,7 +1101,7 @@ $btnRun.Add_Click({
             $UI.LogBox.ScrollToEnd()
 
             [System.Windows.MessageBox]::Show(
-                "Analysis complete!`n`nPolicies found   : $($uniqueConns.Count)`nLines processed  : $lineNum`nExcluded (filter): $skippedFilter`n`nSaved to:`n$out",
+                "Analysis complete!`n`nPolicies found   : $($filteredConns.Count)`nLines processed  : $lineNum`nExcluded (filter): $skippedFilter`n`nSaved to:`n$out",
                 "Complete",
                 [System.Windows.MessageBoxButton]::OK,
                 [System.Windows.MessageBoxImage]::Information)
