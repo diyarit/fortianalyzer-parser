@@ -268,21 +268,23 @@ function Get-ServiceName {
 }
 
 function Convert-ToSubnet {
-    # FIX: Subnet mask is now configurable via $SubnetMask parameter (CIDR bits)
     param([string]$IPAddress, [int]$MaskBits)
     try {
         $octets = $IPAddress -split '\.'
         if ($octets.Count -ne 4) { return $IPAddress }
 
-        # Calculate host mask and apply to IP
-        $ipInt = ([int]$octets[0] -shl 24) -bor ([int]$octets[1] -shl 16) -bor ([int]$octets[2] -shl 8) -bor [int]$octets[3]
-        $netMask = if ($MaskBits -eq 0) { 0 } else { [int]([uint32]::MaxValue -shl (32 - $MaskBits)) }
-        $netInt  = $ipInt -band $netMask
+        # Use [uint32] throughout to avoid signed integer overflow on masks >= /1
+        [uint32]$ipInt   = ([uint32]$octets[0] -shl 24) -bor
+                           ([uint32]$octets[1] -shl 16) -bor
+                           ([uint32]$octets[2] -shl 8)  -bor
+                           [uint32]$octets[3]
+        [uint32]$netMask = if ($MaskBits -eq 0) { 0 } else { [uint32]::MaxValue -shl (32 - $MaskBits) }
+        [uint32]$netInt  = $ipInt -band $netMask
 
         $a = ($netInt -shr 24) -band 0xFF
         $b = ($netInt -shr 16) -band 0xFF
         $c = ($netInt -shr 8)  -band 0xFF
-        $d = $netInt            -band 0xFF
+        $d =  $netInt           -band 0xFF
         return "${a}.${b}.${c}.${d}/${MaskBits}"
     }
     catch {
@@ -343,7 +345,7 @@ function ConvertTo-HtmlSafe {
 
 function Invoke-ParseLine {
     # FIX: Each regex is called only ONCE per field (result stored in variable)
-    param([string]$Line, [int]$LineNumber, [int]$MaskBits, [nullable[datetime]]$StartTime, [nullable[datetime]]$EndTime)
+    param([string]$Line, [int]$LineNumber, [int]$MaskBits, [string]$StartTime = "", [string]$EndTime = "")
 
     if ([string]::IsNullOrWhiteSpace($Line)) { return $null }
 
@@ -355,7 +357,18 @@ function Invoke-ParseLine {
     $mSvc     = $script:patterns.service.Match($Line);  $service = if ($mSvc.Success)     { $mSvc.Groups[1].Value }     else { "" }
     $mSrcIntf = $script:patterns.srcintf.Match($Line);  $srcintf = if ($mSrcIntf.Success) { $mSrcIntf.Groups[1].Value } else { "" }
     $mDstIntf = $script:patterns.dstintf.Match($Line);  $dstintf = if ($mDstIntf.Success) { $mDstIntf.Groups[1].Value } else { "" }
-    $mAction  = $script:patterns.action.Match($Line);   $action  = if ($mAction.Success)  { $mAction.Groups[1].Value }  else { "" }
+    $mAction  = $script:patterns.action.Match($Line);
+    $action  = if ($mAction.Success) {
+        # Normalise: FortiAnalyzer writes "close" for completed allowed sessions
+        switch ($mAction.Groups[1].Value.ToLower()) {
+            "close"        { "accept" }
+            "accept"       { "accept" }
+            "deny"         { "deny"   }
+            "server-rst"   { "accept" }
+            "client-rst"   { "accept" }
+            default        { $mAction.Groups[1].Value }
+        }
+    } else { "" }
     $mProto   = $script:patterns.proto.Match($Line);    $proto   = if ($mProto.Success)   { $mProto.Groups[1].Value }   else { "" }
 
     # Essential field check
@@ -417,33 +430,77 @@ function Invoke-ParseLine {
 
 #region --- Filter Logic ---
 
-function Test-Filters {
-    # Service filter accepts a raw port number (e.g. "443") OR a partial
-    # service name (e.g. "HTTP").  All-digit input is matched against the
-    # raw destination port; anything else is a case-insensitive wildcard
-    # match against the resolved service name (e.g. HTTPS, HTTP-ALT).
+function Test-ServiceAction {
+    # Applied during parse for efficiency - filters service/port and action only.
+    # IP filtering happens post-parse with exact-then-subnet fallback logic.
+    #
+    # Service filter rules:
+    #   - All digits (e.g. "443"): exact match on raw destination port number
+    #   - Text (e.g. "HTTPS"):     matches against BOTH the raw service field
+    #     from the log (service="HTTPS") AND the resolved service name.
+    #     Uses exact match first, then partial (contains) as fallback so that
+    #     "HTTP" finds HTTP, HTTPS, HTTP-ALT without matching unrelated names.
     param(
-        [string]$SrcIP,
-        [string]$DstIP,
+        [string]$RawService,
         [string]$DstPort,
         [string]$SvcName,
         [string]$Action,
-        [string]$FSrcIP,
-        [string]$FDstIP,
         [string]$FSvc,
         [string]$FAction
     )
-    if ($FSrcIP -and $SrcIP -notlike "*$FSrcIP*") { return $false }
-    if ($FDstIP -and $DstIP -notlike "*$FDstIP*") { return $false }
     if ($FSvc) {
         if ($FSvc -match '^\d+$') {
+            # Numeric: exact destination port
             if ($DstPort -ne $FSvc) { return $false }
         } else {
-            if ($SvcName -notlike "*$FSvc*") { return $false }
+            $fUpper = $FSvc.ToUpper()
+            # Match against raw log service field OR resolved name
+            $rawUpper = $RawService.ToUpper()
+            $exactMatch   = ($rawUpper -eq $fUpper) -or ($SvcName -eq $fUpper)
+            $partialMatch = ($rawUpper -like "*$fUpper*") -or ($SvcName -like "*$fUpper*")
+            if (-not $exactMatch -and -not $partialMatch) { return $false }
         }
     }
     if ($FAction -and $Action -ne $FAction) { return $false }
     return $true
+}
+
+function Select-ByIPFilter {
+    # Post-parse IP filtering with exact-then-subnet fallback.
+    # Pass 1: exact IP match on both src and dst.
+    # Pass 2: if pass 1 returns nothing, fall back to subnet prefix match.
+    param(
+        [hashtable]$UniqueConnections,
+        [string]$FSrcIP,
+        [string]$FDstIP
+    )
+    # No IP filters - return everything as-is
+    if (-not $FSrcIP -and -not $FDstIP) { return $UniqueConnections }
+
+    # Pass 1: exact match
+    $exact = @{}
+    foreach ($kv in $UniqueConnections.GetEnumerator()) {
+        $conn = $kv.Value.Connection
+        $srcMatch = (-not $FSrcIP) -or ($conn.SourceIP -eq $FSrcIP)
+        $dstMatch = (-not $FDstIP) -or ($conn.DestIP   -eq $FDstIP)
+        if ($srcMatch -and $dstMatch) { $exact[$kv.Key] = $kv.Value }
+    }
+    if ($exact.Count -gt 0) {
+        Write-Log "IP filter: exact match returned $($exact.Count) unique pattern(s)." "Info"
+        return $exact
+    }
+
+    # Pass 2: subnet prefix fallback (contains match on subnet string)
+    Write-Log "IP filter: no exact matches found - falling back to subnet prefix match." "Info"
+    $subnet = @{}
+    foreach ($kv in $UniqueConnections.GetEnumerator()) {
+        $conn = $kv.Value.Connection
+        $srcMatch = (-not $FSrcIP) -or ($conn.SourceSubnet -like "*$FSrcIP*") -or ($conn.SourceIP -like "$FSrcIP*")
+        $dstMatch = (-not $FDstIP) -or ($conn.DestSubnet   -like "*$FDstIP*") -or ($conn.DestIP   -like "$FDstIP*")
+        if ($srcMatch -and $dstMatch) { $subnet[$kv.Key] = $kv.Value }
+    }
+    Write-Log "IP filter: subnet fallback returned $($subnet.Count) unique pattern(s)." "Info"
+    return $subnet
 }
 
 #endregion
@@ -481,14 +538,14 @@ function Invoke-ProcessLogFile {
                 $connection = Invoke-ParseLine $line $lineNumber $MaskBits $StartTime $EndTime
                 if ($null -ne $connection) {
 
-                    # Apply IP / service / action filters before storing
-                    if (-not (Test-Filters `
-                            $connection.SourceIP `
-                            $connection.DestIP `
+                    # Service/action filter applied during parse (fast path).
+                    # IP filter is applied post-parse with exact/subnet fallback.
+                    if (-not (Test-ServiceAction `
+                            $connection.Service `
                             $connection.DestPort `
                             $connection.ServiceName `
                             $connection.Action `
-                            $FilterSrcIP $FilterDstIP $FilterService $FilterAction)) {
+                            $FilterService $FilterAction)) {
                         $skippedFilter++
                         $script:metrics.SkippedLines++
                         continue
@@ -550,8 +607,8 @@ function Invoke-ProcessLogFileParallel {
         [hashtable]$UniqueConnections,
         [int]$MaskBits,
         [int]$MaxThreads,
-        [nullable[datetime]]$StartTime,
-        [nullable[datetime]]$EndTime
+        [string]$StartTime = "",
+        [string]$EndTime = ""
     )
 
     Write-Log "Parallel mode: loading chunks with $MaxThreads threads..." "Info"
@@ -605,16 +662,16 @@ function Invoke-ProcessLogFileParallel {
                     switch ($proto) { "6" { "TCP/$dstport" } "17" { "UDP/$dstport" } default { "PROTO${proto}/$dstport" } }
                 }
 
-                # Subnet
+                # Subnet - use [uint32] to avoid signed integer overflow
                 $octets = $srcip -split '\.'
-                $ipInt  = ([int]$octets[0] -shl 24) -bor ([int]$octets[1] -shl 16) -bor ([int]$octets[2] -shl 8) -bor [int]$octets[3]
-                $nm     = if ($MaskBits -eq 0) { 0 } else { [int]([uint32]::MaxValue -shl (32 - $MaskBits)) }
-                $ni     = $ipInt -band $nm
+                [uint32]$ipInt = ([uint32]$octets[0] -shl 24) -bor ([uint32]$octets[1] -shl 16) -bor ([uint32]$octets[2] -shl 8) -bor [uint32]$octets[3]
+                [uint32]$nm    = if ($MaskBits -eq 0) { 0 } else { [uint32]::MaxValue -shl (32 - $MaskBits) }
+                [uint32]$ni    = $ipInt -band $nm
                 $srcSubnet = "$( ($ni -shr 24) -band 0xFF).$( ($ni -shr 16) -band 0xFF).$( ($ni -shr 8) -band 0xFF).$($ni -band 0xFF)/${MaskBits}"
 
                 $octets2 = $dstip -split '\.'
-                $ipInt2  = ([int]$octets2[0] -shl 24) -bor ([int]$octets2[1] -shl 16) -bor ([int]$octets2[2] -shl 8) -bor [int]$octets2[3]
-                $ni2     = $ipInt2 -band $nm
+                [uint32]$ipInt2 = ([uint32]$octets2[0] -shl 24) -bor ([uint32]$octets2[1] -shl 16) -bor ([uint32]$octets2[2] -shl 8) -bor [uint32]$octets2[3]
+                [uint32]$ni2    = $ipInt2 -band $nm
                 $dstSubnet = "$( ($ni2 -shr 24) -band 0xFF).$( ($ni2 -shr 16) -band 0xFF).$( ($ni2 -shr 8) -band 0xFF).$($ni2 -band 0xFF)/${MaskBits}"
 
                 [void]$results.Add(@{
@@ -672,7 +729,8 @@ function Invoke-ProcessLogFileParallel {
 #region --- Export Functions ---
 
 function Export-Results {
-    param([string]$OutputFile, [string]$Format, [System.Collections.ArrayList]$Connections, [hashtable]$UniqueConnections)
+    param([string]$OutputFile, [string]$Format, [System.Collections.ArrayList]$Connections, [hashtable]$UniqueConnections,
+          [string]$FilterSrcIP = "", [string]$FilterDstIP = "")
 
     Write-Log "Preparing export in $Format format..." "Info"
 
@@ -684,8 +742,8 @@ function Export-Results {
             PolicyName        = $conn.PolicyName
             IncomingInterface = $conn.SourceInterface
             OutgoingInterface = $conn.DestInterface
-            Source            = $conn.SourceSubnet
-            Destination       = $conn.DestSubnet
+            Source            = if ($FilterSrcIP) { $conn.SourceIP } else { $conn.SourceSubnet }
+            Destination       = if ($FilterDstIP) { $conn.DestIP } else { $conn.DestSubnet }
             Service           = $conn.ServiceName
             Action            = $conn.Action
             TrafficCount      = $d.Count
@@ -699,7 +757,8 @@ function Export-Results {
         })
     }
 
-    $sorted = $exportList | Sort-Object TrafficCount -Descending
+    # @() guarantees array even when Sort-Object returns a single object (PS 5.1 behaviour)
+    $sorted = @($exportList | Sort-Object TrafficCount -Descending)
 
     switch ($Format.ToUpper()) {
         "CSV" {
@@ -734,48 +793,53 @@ function Export-Results {
 
 function Build-TextReport {
     param($Data, $Connections, $UniqueConnections)
+    # Guarantee $Data is an array so .Count is always reliable in PS 5.1
+    $Data    = @($Data)
     $ts      = [DateTime]::Now.ToString("MMMM dd, yyyy 'at' HH:mm:ss")
     $elapsed = [Math]::Round(([DateTime]::Now - $script:metrics.StartTime).TotalSeconds, 2)
 
     $sb = [System.Text.StringBuilder]::new()
-    [void]$sb.AppendLine("=== FORTIGATE LOG ANALYSIS RESULTS v3.0.0 ===")
-    [void]$sb.AppendLine("Analysis Date        : $ts")
-    [void]$sb.AppendLine("Total Traffic Flows  : $($Connections.Count.ToString('N0'))")
-    [void]$sb.AppendLine("Unique Policy Patterns: $($UniqueConnections.Count.ToString('N0'))")
-    [void]$sb.AppendLine("Processing Time      : ${elapsed}s")
+    [void]$sb.AppendLine("=== FORTIGATE LOG ANALYSIS RESULTS v3.1.0 ===")
+    [void]$sb.AppendLine("Analysis Date          : $ts")
+    [void]$sb.AppendLine("Total Traffic Flows    : $($Connections.Count.ToString('N0'))")
+    [void]$sb.AppendLine("Unique Policy Patterns : $($Data.Count)")
+    [void]$sb.AppendLine("Processing Time        : ${elapsed}s")
+    [void]$sb.AppendLine("Active Filters         : $script:filterSummary")
     [void]$sb.AppendLine("")
 
     $idx = 0
     foreach ($item in $Data) {
         $idx++
-        [void]$sb.AppendLine("Policy       : $($item.PolicyName)")
-        [void]$sb.AppendLine("Source       : $($item.Source) ($($item.IncomingInterface))")
-        [void]$sb.AppendLine("Destination  : $($item.Destination) ($($item.OutgoingInterface))")
-        [void]$sb.AppendLine("Service      : $($item.Service)")
-        [void]$sb.AppendLine("Action       : $(if($item.Action -eq 'accept'){'ALLOW'}else{'DENY'})")
-        [void]$sb.AppendLine("Traffic Count: $($item.TrafficCount)")
+        [void]$sb.AppendLine("Policy        : $($item.PolicyName)")
+        [void]$sb.AppendLine("Source        : $($item.Source) via $($item.IncomingInterface)")
+        [void]$sb.AppendLine("Destination   : $($item.Destination) via $($item.OutgoingInterface)")
+        [void]$sb.AppendLine("Service       : $($item.Service)")
+        [void]$sb.AppendLine("Action        : $(if($item.Action -eq 'accept'){'ALLOW'}else{'DENY'})")
+        [void]$sb.AppendLine("NAT           : $(if($item.PSObject.Properties['NatEnabled']){$item.NatEnabled}else{'N/A'})")
+        [void]$sb.AppendLine("Traffic Count : $($item.TrafficCount)")
         if ($idx -lt $Data.Count) { [void]$sb.AppendLine("============================") }
     }
 
     [void]$sb.AppendLine("")
-    [void]$sb.AppendLine("=== ANALYSIS SUMMARY ===")
+    [void]$sb.AppendLine("=== SUMMARY ===")
     [void]$sb.AppendLine("Policies Required : $($Data.Count)")
     [void]$sb.AppendLine("Lines Processed   : $($script:metrics.ProcessedLines)")
     [void]$sb.AppendLine("Lines Skipped     : $($script:metrics.SkippedLines)")
     [void]$sb.AppendLine("Errors            : $($script:metrics.ErrorCount)")
     [void]$sb.AppendLine("Warnings          : $($script:metrics.WarningCount)")
     [void]$sb.AppendLine("")
-    [void]$sb.AppendLine("Generated by FortiAnalyzer Log Parser v3.0.0")
+    [void]$sb.AppendLine("Generated by FortiAnalyzer Log Parser v3.1.0")
     return $sb.ToString()
 }
 
 function Build-HtmlReport {
     # FIX: All user-derived data is HTML-encoded to prevent XSS
     param($Data, $Connections, $UniqueConnections)
-
+    # Guarantee $Data is an array so .Count is always reliable in PS 5.1
+    $Data         = @($Data)
     $ts           = [DateTime]::Now.ToString("MMMM dd, yyyy 'at' HH:mm:ss")
     $totalFlows   = $Connections.Count.ToString('N0')
-    $uniquePat    = $UniqueConnections.Count.ToString('N0')
+    $uniquePat    = $Data.Count.ToString('N0')
     $elapsed      = [Math]::Round(([DateTime]::Now - $script:metrics.StartTime).TotalSeconds, 2)
 
     $sb = [System.Text.StringBuilder]::new()
@@ -893,6 +957,19 @@ try {
     # Load config overrides
     if ($ConfigFile) { Import-Config -Path $ConfigFile }
 
+    # Auto-correct output file extension to match selected format
+    $correctExt = switch ($OutputFormat.ToUpper()) {
+        "JSON" { ".json" }
+        "HTML" { ".html" }
+        "TEXT" { ".txt"  }
+        default { ".csv"  }
+    }
+    if ($OutputFile -match '\.(csv|json|html|txt)$') {
+        $OutputFile = $OutputFile -replace '\.(csv|json|html|txt)$', $correctExt
+    } else {
+        $OutputFile = $OutputFile + $correctExt
+    }
+
     # Validate prerequisites
     Write-Log "Validating prerequisites..." "Info"
     if (-not (Test-Prerequisites -LogFilePath $LogFilePath -OutputFile $OutputFile)) {
@@ -902,8 +979,8 @@ try {
 
     # Log active filters
     $filterParts = @()
-    if ($FilterSrcIP)   { $filterParts += "SrcIP contains '$FilterSrcIP'" }
-    if ($FilterDstIP)   { $filterParts += "DstIP contains '$FilterDstIP'" }
+    if ($FilterSrcIP)   { $filterParts += "SrcIP = '$FilterSrcIP'" }
+    if ($FilterDstIP)   { $filterParts += "DstIP = '$FilterDstIP'" }
     if ($FilterService) {
         if ($FilterService -match '^\d+$') {
             $filterParts += "Port = $FilterService"
@@ -914,6 +991,7 @@ try {
     if ($FilterAction)  { $filterParts += "Action = '$FilterAction'" }
     $filterSummary = if ($filterParts.Count -gt 0) { $filterParts -join " AND " } else { "None" }
     Write-Log "Active filters: $filterSummary" "Info"
+    $script:filterSummary = $filterSummary  # make available to report builders
 
     # Process
     if ($UseParallel) {
@@ -939,8 +1017,14 @@ try {
     }
 
     # Export
-    $exportData = Export-Results -OutputFile $OutputFile -Format $OutputFormat `
-        -Connections $connections -UniqueConnections $uniqueConnections
+    # Apply IP filter post-parse (exact match first, subnet fallback)
+    $filteredConnections = Select-ByIPFilter -UniqueConnections $uniqueConnections `
+        -FSrcIP $FilterSrcIP -FDstIP $FilterDstIP
+
+    # @() guarantees array even when Export-Results returns a single object (PS 5.1)
+    $exportData = @(Export-Results -OutputFile $OutputFile -Format $OutputFormat `
+        -Connections $connections -UniqueConnections $filteredConnections `
+        -FilterSrcIP $FilterSrcIP -FilterDstIP $FilterDstIP)
 
     # Summary
     Write-Host ""
