@@ -1,0 +1,477 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FortiAnalyzer Traffic Analysis v4.0.0</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;color:#1a1a2e}
+.hdr{background:linear-gradient(135deg,#1a1a2e,#0f3460);color:#e0e0e0;padding:24px 28px}
+.hdr h1{font-size:1.5rem;font-weight:700}
+.hdr .sub{margin-top:4px;font-size:.85rem;opacity:.7}
+.wrap{max-width:1600px;margin:0 auto;padding:20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:16px}
+.card{background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.card h3{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;color:#888;margin-bottom:6px}
+.card .val{font-size:1.8rem;font-weight:800;color:#0f3460}
+.filter-bar{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:.85rem;color:#92400e}
+.filter-bar strong{color:#78350f}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+@media(max-width:900px){.charts{grid-template-columns:1fr}}
+.chart-box{background:#fff;border-radius:8px;padding:16px 20px;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+.chart-box h3{font-size:.8rem;text-transform:uppercase;letter-spacing:1px;color:#666;margin-bottom:12px}
+.bar-row{display:flex;align-items:center;margin-bottom:6px;font-size:.78rem}
+.bar-label{width:120px;text-align:right;padding-right:10px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-track{flex:1;height:18px;background:#f0f0f0;border-radius:4px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;transition:width .3s}
+.bar-val{width:50px;padding-left:8px;font-weight:600;color:#333}
+.donut-wrap{display:flex;align-items:center;gap:20px}
+.donut{width:100px;height:100px;border-radius:50%;position:relative}
+.donut-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.1rem;font-weight:800;color:#333}
+.donut-legend{font-size:.82rem;line-height:1.8}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.search-bar{margin-bottom:12px}
+.search-bar input{width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;font-size:.88rem}
+.tbl-wrap{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.07);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+thead th{background:#0f3460;color:#fff;padding:11px 13px;text-align:left;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none}
+thead th:hover{background:#1a4a7a}
+thead th::after{content:' \25B2';font-size:.6rem;opacity:.4}
+thead th.sort-desc::after{content:' \25BC';opacity:.8}
+tbody td{padding:10px 13px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#f7f9fc}
+.badge{display:inline-block;padding:1px 9px;border-radius:10px;font-size:.72rem;font-weight:700}
+.allow{background:#d4edda;color:#155724}
+.deny{background:#f8d7da;color:#721c24}
+.nat-on{background:#dbeafe;color:#1e40af}
+.mono{font-family:'Courier New',monospace;font-size:.8rem}
+.footer{text-align:center;padding:16px;color:#aaa;font-size:.78rem}
+.expand-btn{cursor:pointer;color:#0f3460;font-weight:600;font-size:.78rem}
+.detail-row{display:none}
+.detail-row.open{display:table-row}
+.detail-cell{padding:8px 13px 12px;background:#f9fafb;font-size:.8rem;color:#555;border-bottom:2px solid #e5e7EB}
+@media print{
+  .search-bar,.expand-btn{display:none!important}
+  .hdr{background:#1a1a2e!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  tbody tr:hover{background:none}
+  .tbl-wrap{box-shadow:none;border:1px solid #ddd}
+  .chart-box{break-inside:avoid}
+  @page{margin:1cm}
+}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>FortiAnalyzer Network Traffic Analysis</h1>
+  <div class="sub">v4.0.0 &mdash; Generated June 20, 2026 at 02:17:48</div>
+</div>
+<div class="wrap">
+  <div class="cards">
+    <div class="card"><h3>Lines Read</h3><div class="val">20</div></div>
+    <div class="card"><h3>Excluded by Filters</h3><div class="val">0</div></div>
+    <div class="card"><h3>Policies Required</h3><div class="val">15</div></div>
+  </div>
+  <div class="filter-bar"><strong>Active Filters:</strong> None</div>
+
+  <div class="charts">
+    <div class="chart-box">
+      <h3>Top 10 Services</h3>      <div class="bar-row">
+        <div class="bar-label" title="HTTPS">HTTPS</div>
+        <div class="bar-track"><div class="bar-fill" style="width:100%;background:#3B82F6"></div></div>
+        <div class="bar-val">5</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="DNS">DNS</div>
+        <div class="bar-track"><div class="bar-fill" style="width:60%;background:#3B82F6"></div></div>
+        <div class="bar-val">3</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="HTTP-ALT">HTTP-ALT</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="MSSQL">MSSQL</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="SMB">SMB</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="RDP">RDP</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="HTTP">HTTP</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="SSH">SSH</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>      <div class="bar-row">
+        <div class="bar-label" title="TELNET">TELNET</div>
+        <div class="bar-track"><div class="bar-fill" style="width:20%;background:#3B82F6"></div></div>
+        <div class="bar-val">1</div>
+      </div>    </div>
+    <div class="chart-box">
+      <h3>Action Breakdown</h3>
+      <div class="donut-wrap">
+        <div class="donut" style="background:conic-gradient(#22c55e 0% 87%, #ef4444 87% 100%)">
+          <div class="donut-center">15</div>
+        </div>
+        <div class="donut-legend">
+          <div><span class="legend-dot" style="background:#22c55e"></span>ALLOW: 13 (87%)</div>
+          <div><span class="legend-dot" style="background:#ef4444"></span>DENY: 2 (13%)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Search policies, IPs, services..." onkeyup="filterTable()">
+  </div>
+
+  <div class="tbl-wrap">
+  <table id="policyTable">
+    <thead><tr>
+      <th>#</th><th>Policy Name</th><th>In Intf</th><th>Out Intf</th>
+      <th>Source</th><th>Destination</th><th>Service</th>
+      <th>Action</th><th>NAT</th><th>Traffic</th><th></th>
+    </tr></thead>
+    <tbody>    <tr>
+      <td style="color:#bbb">1</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_HTTPS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">142.250.80.0/24</td>
+      <td><strong>HTTPS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>4</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.10 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 142.250.80.46 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52342 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 443 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">2</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_HTTP</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">151.101.1.0/24</td>
+      <td><strong>HTTP</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>2</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.10 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 151.101.1.140 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52343 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 80 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">3</td>
+      <td class="mono">ALLOW_INTERNAL_TO_DMZ_SSH</td>
+      <td>internal</td><td>dmz</td>
+      <td class="mono">10.0.3.0/24</td><td class="mono">10.0.5.0/24</td>
+      <td><strong>SSH</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>2</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 10.0.3.100 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 10.0.5.50 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 49202 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 22 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">4</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_HTTPS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">203.0.113.0/24</td>
+      <td><strong>HTTPS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.30 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 203.0.113.50 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52344 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 443 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">5</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_DNS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">8.8.8.0/24</td>
+      <td><strong>DNS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.10 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 8.8.8.8 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52341 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 53 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 17 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">6</td>
+      <td class="mono">DENY_GUEST_TO_DMZ_TELNET</td>
+      <td>guest</td><td>dmz</td>
+      <td class="mono">192.168.2.0/24</td><td class="mono">10.0.5.0/24</td>
+      <td><strong>TELNET</strong></td>
+      <td><span class="badge deny">DENY</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.2.50 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 10.0.5.50 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 49206 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 23 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">7</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_DNS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">8.8.4.0/24</td>
+      <td><strong>DNS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.10 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 8.8.4.4 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52345 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 53 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 17 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">8</td>
+      <td class="mono">ALLOW_INTERNAL_TO_DMZ_RDP</td>
+      <td>internal</td><td>dmz</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">10.0.5.0/24</td>
+      <td><strong>RDP</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.20 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 10.0.5.50 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 49201 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 3389 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">9</td>
+      <td class="mono">ALLOW_INTERNAL_TO_DMZ_HTTPS</td>
+      <td>internal</td><td>dmz</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">10.0.5.0/24</td>
+      <td><strong>HTTPS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.10 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 10.0.5.50 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52354 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 443 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">10</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_HTTP_ALT</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">198.51.100.0/24</td>
+      <td><strong>HTTP-ALT</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.40 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 198.51.100.10 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52346 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 8080 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">11</td>
+      <td class="mono">DENY_GUEST_TO_DMZ_SMB</td>
+      <td>guest</td><td>dmz</td>
+      <td class="mono">192.168.2.0/24</td><td class="mono">10.0.5.0/24</td>
+      <td><strong>SMB</strong></td>
+      <td><span class="badge deny">DENY</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.2.50 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 10.0.5.50 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 49203 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 445 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">12</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_HTTPS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">104.244.42.0/24</td>
+      <td><strong>HTTPS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.50 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 104.244.42.1 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52348 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 443 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">13</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_DNS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">1.1.1.0/24</td>
+      <td><strong>DNS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.10 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 1.1.1.1 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52349 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 53 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 17 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">14</td>
+      <td class="mono">ALLOW_INTERNAL_TO_DMZ_MSSQL</td>
+      <td>internal</td><td>dmz</td>
+      <td class="mono">10.0.3.0/24</td><td class="mono">10.0.5.0/24</td>
+      <td><strong>MSSQL</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 10.0.3.100 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 10.0.5.25 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 49204 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 1433 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    <tr>
+      <td style="color:#bbb">15</td>
+      <td class="mono">ALLOW_INTERNAL_TO_WAN1_HTTPS</td>
+      <td>internal</td><td>wan1</td>
+      <td class="mono">192.168.1.0/24</td><td class="mono">93.184.216.0/24</td>
+      <td><strong>HTTPS</strong></td>
+      <td><span class="badge allow">ALLOW</span></td>
+      <td><span class="badge ">Disabled</span></td>
+      <td>1</td>
+      <td><span class="expand-btn" onclick="toggleDetail(this)">&#9660;</span></td>
+    </tr>
+    <tr class="detail-row"><td colspan="11" class="detail-cell">
+      <strong>Source IP:</strong> 192.168.1.60 &nbsp;|&nbsp;
+      <strong>Dest IP:</strong> 93.184.216.34 &nbsp;|&nbsp;
+      <strong>Src Port:</strong> 52350 &nbsp;|&nbsp;
+      <strong>Dst Port:</strong> 443 &nbsp;|&nbsp;
+      <strong>Protocol:</strong> 6 &nbsp;|&nbsp;
+      <strong>First Seen:</strong> 06/20/2026 02:17:48 &nbsp;|&nbsp;
+      <strong>Last Seen:</strong> 06/20/2026 02:17:48
+    </td></tr>    </tbody></table></div>
+  <div class="footer">FortiAnalyzer Log Parser v4.0.0 &mdash; 20 lines processed</div>
+</div>
+<script>
+function filterTable(){
+  var input=document.getElementById('searchInput').value.toLowerCase();
+  var rows=document.querySelectorAll('#policyTable tbody tr:not(.detail-row)');
+  rows.forEach(function(r){
+    var match=r.textContent.toLowerCase().includes(input);
+    r.style.display=match?'':'none';
+    var detail=r.nextElementSibling;
+    if(detail&&detail.classList.contains('detail-row'))detail.style.display='none';
+  });
+}
+function toggleDetail(btn){
+  var row=btn.closest('tr');
+  var detail=row.nextElementSibling;
+  if(detail&&detail.classList.contains('detail-row')){
+    detail.classList.toggle('open');
+    btn.innerHTML=detail.classList.contains('open')?'&#9650;':'&#9660;';
+  }
+}
+document.querySelectorAll('#policyTable thead th').forEach(function(th,i){
+  th.addEventListener('click',function(){
+    var table=document.getElementById('policyTable');
+    var tbody=table.querySelector('tbody');
+    var rows=Array.from(tbody.querySelectorAll('tr:not(.detail-row)'));
+    var detailRows=Array.from(tbody.querySelectorAll('tr.detail-row'));
+    var dir=th.classList.contains('sort-asc')?'desc':'asc';
+    document.querySelectorAll('#policyTable thead th').forEach(function(h){h.classList.remove('sort-asc','sort-desc')});
+    th.classList.add('sort-'+dir);
+    var getVal=function(r,c){
+      var cell=r.cells[c];
+      if(!cell)return'';
+      var n=parseFloat(cell.textContent.replace(/,/g,''));
+      return isNaN(n)?cell.textContent.toLowerCase():n;
+    };
+    rows.sort(function(a,b){
+      var va=getVal(a,i),vb=getVal(b,i);
+      if(typeof va==='number'&&typeof vb==='number'){return dir==='asc'?va-vb:vb-va}
+      return dir==='asc'?va.localeCompare(vb):vb.localeCompare(va);
+    });
+    rows.forEach(function(r){
+      tbody.appendChild(r);
+      var d=r.nextElementSibling;
+      if(d&&d.classList.contains('detail-row'))tbody.appendChild(d);
+    });
+  });
+});
+</script>
+</body></html>
